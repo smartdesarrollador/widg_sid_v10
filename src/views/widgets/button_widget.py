@@ -4,6 +4,11 @@ Category Button Widget
 from PyQt6.QtWidgets import QPushButton
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QFont
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from styles.futuristic_theme import get_theme
 
 
 class CategoryButton(QPushButton):
@@ -14,6 +19,7 @@ class CategoryButton(QPushButton):
         self.category_id = category_id
         self.category_name = category_name
         self.is_active = False
+        self.theme = get_theme()  # Obtener tema futurista
 
         self.init_ui()
 
@@ -40,37 +46,51 @@ class CategoryButton(QPushButton):
     def update_style(self):
         """Update button style based on state"""
         if self.is_active:
-            self.setStyleSheet("""
-                QPushButton {
-                    background-color: #3d3d3d;
-                    color: #ffffff;
+            self.setStyleSheet(f"""
+                QPushButton {{
+                    background: qlineargradient(
+                        x1:0, y1:0, x2:1, y2:0,
+                        stop:0 {self.theme.get_color('primary')},
+                        stop:1 transparent
+                    );
+                    color: {self.theme.get_color('text_primary')};
                     border: none;
-                    border-left: 3px solid #007acc;
+                    border-left: 3px solid {self.theme.get_color('accent')};
                     padding: 5px;
                     text-align: center;
                     font-weight: bold;
-                }
-                QPushButton:hover {
-                    background-color: #454545;
-                }
+                }}
+                QPushButton:hover {{
+                    background: qlineargradient(
+                        x1:0, y1:0, x2:1, y2:0,
+                        stop:0 {self.theme.get_color('secondary')},
+                        stop:1 transparent
+                    );
+                    border-left: 3px solid {self.theme.get_color('primary')};
+                }}
             """)
         else:
-            self.setStyleSheet("""
-                QPushButton {
-                    background-color: #2b2b2b;
-                    color: #cccccc;
+            self.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    color: {self.theme.get_color('text_secondary')};
                     border: none;
                     border-left: 3px solid transparent;
                     padding: 5px;
                     text-align: center;
-                }
-                QPushButton:hover {
-                    background-color: #3d3d3d;
-                    color: #ffffff;
-                }
-                QPushButton:pressed {
-                    background-color: #454545;
-                }
+                }}
+                QPushButton:hover {{
+                    background-color: {self.theme.get_color('surface')};
+                    color: {self.theme.get_color('text_primary')};
+                    border-left: 3px solid {self.theme.get_color('primary')};
+                }}
+                QPushButton:pressed {{
+                    background: qlineargradient(
+                        x1:0, y1:0, x2:1, y2:0,
+                        stop:0 {self.theme.get_color('primary')},
+                        stop:1 transparent
+                    );
+                }}
             """)
 
     def set_active(self, active: bool):

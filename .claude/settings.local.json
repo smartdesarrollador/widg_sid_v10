@@ -31,7 +31,9 @@
       "Bash(dir:*)",
       "Bash(if not exist \"C:\\Users\\ASUS\\Desktop\\proyectos_python\\widget_sidebar\\src\\views\\dashboard\" mkdir \"C:\\Users\\ASUS\\Desktop\\proyectos_python\\widget_sidebar\\src\\views\\dashboard\")",
       "Bash(findstr:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(nul)",
+      "Bash(copy .env backup_2025-11-01_23-25-09.env)"
     ],
     "deny": [],
     "ask": []
