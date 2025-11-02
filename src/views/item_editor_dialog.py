@@ -17,6 +17,77 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from models.item import Item, ItemType
 
 
+class ResizableTextEdit(QTextEdit):
+    """QTextEdit con resize grip en la esquina inferior derecha que permite redimensionar en altura"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        # Variables para el resize
+        self.resizing = False
+        self.resize_start_y = 0
+        self.resize_start_height = 0
+        self.resize_edge_height = 15  # Altura del área de resize en píxeles
+
+        # Habilitar mouse tracking
+        self.setMouseTracking(True)
+
+    def is_on_bottom_edge(self, pos):
+        """Check if mouse position is on the bottom edge for resizing"""
+        return pos.y() >= self.height() - self.resize_edge_height
+
+    def mousePressEvent(self, event):
+        """Handle mouse press for resizing"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            if self.is_on_bottom_edge(event.pos()):
+                # Start resizing
+                self.resizing = True
+                self.resize_start_y = event.globalPosition().toPoint().y()
+                self.resize_start_height = self.height()
+                event.accept()
+                return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        """Handle mouse move for resizing or cursor change"""
+        if self.resizing:
+            # Calculate new height
+            current_y = event.globalPosition().toPoint().y()
+            delta_y = current_y - self.resize_start_y
+            new_height = self.resize_start_height + delta_y
+
+            # Apply constraints
+            new_height = max(120, min(new_height, 600))  # Min 120px, Max 600px
+
+            # Resize usando setFixedHeight para forzar el tamaño exacto
+            self.setFixedHeight(new_height)
+
+            # Notificar al layout padre que el tamaño cambió
+            self.updateGeometry()
+
+            # Ajustar el tamaño del diálogo padre si es necesario
+            if self.parent() and hasattr(self.parent(), 'adjustSize'):
+                self.parent().adjustSize()
+
+            event.accept()
+        else:
+            # Change cursor when hovering over bottom edge
+            if self.is_on_bottom_edge(event.pos()):
+                self.setCursor(Qt.CursorShape.SizeVerCursor)
+            else:
+                self.setCursor(Qt.CursorShape.IBeamCursor)
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        """Handle mouse release to end resizing"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            if self.resizing:
+                self.resizing = False
+                event.accept()
+                return
+        super().mouseReleaseEvent(event)
+
+
 class ItemEditorDialog(QDialog):
     """
     Dialog for creating or editing items
@@ -43,7 +114,11 @@ class ItemEditorDialog(QDialog):
         # Window properties
         title = "Editar Item" if self.is_edit_mode else "Nuevo Item"
         self.setWindowTitle(title)
-        self.setFixedSize(450, 570)  # Increased height for state checkboxes
+
+        # Hacer la ventana redimensionable
+        self.setMinimumSize(400, 500)  # Tamaño mínimo
+        self.resize(450, 570)  # Tamaño inicial
+
         self.setModal(True)
 
         # Apply dark theme
@@ -108,9 +183,9 @@ class ItemEditorDialog(QDialog):
             self.type_combo.addItem(item_type.value.upper(), item_type)
         form_layout.addRow("Tipo:", self.type_combo)
 
-        # Content field (required, multiline)
+        # Content field (required, multiline) - con resize grip
         content_label = QLabel("Content *:")
-        self.content_input = QTextEdit()
+        self.content_input = ResizableTextEdit()
         self.content_input.setPlaceholderText("Contenido a copiar al portapapeles")
         self.content_input.setMinimumHeight(120)
         form_layout.addRow(content_label, self.content_input)
