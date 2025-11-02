@@ -80,6 +80,7 @@ class DashboardManager:
                     'icon': category.get('icon', '📁'),
                     'tags': self._parse_tags(category.get('tags', '')),
                     'is_predefined': category.get('is_predefined', False),
+                    'is_active': category.get('is_active', 1),  # Agregar campo is_active
                     'items': []
                 }
 
@@ -95,7 +96,9 @@ class DashboardManager:
                         'is_sensitive': bool(item.get('is_sensitive', 0)),
                         'description': item.get('description', ''),
                         'is_list': bool(item.get('is_list', 0)),
-                        'list_group': item.get('list_group', None)
+                        'list_group': item.get('list_group', None),
+                        'is_active': item.get('is_active', 1),  # Agregar campo is_active
+                        'is_archived': bool(item.get('is_archived', 0))  # Agregar campo is_archived
                     }
                     category_data['items'].append(item_data)
 

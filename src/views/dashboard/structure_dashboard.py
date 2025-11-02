@@ -53,6 +53,10 @@ class StructureDashboard(QDialog):
             'items': []        # Lista de (category_id, item_id) tuplas
         }
 
+        # Tracking de filtros activos
+        self.active_filter = None  # 'favorites', 'inactive', 'archived', None
+        self.filter_buttons = {}  # Referencias a los botones de filtro
+
         self.init_ui()
         self.setup_shortcuts()
         self.load_data()
@@ -188,6 +192,10 @@ class StructureDashboard(QDialog):
             QPushButton:pressed {
                 background-color: #004578;
             }
+            QPushButton:checked {
+                background-color: #00cc44;
+                border: 2px solid #00ff55;
+            }
             QTreeWidget {
                 background-color: #252525;
                 color: #ffffff;
@@ -267,11 +275,27 @@ class StructureDashboard(QDialog):
 
         layout.addStretch()
 
-        # Filter buttons
-        fav_btn = QPushButton("⭐ Favoritos")
-        fav_btn.setToolTip("Mostrar solo items favoritos")
-        fav_btn.clicked.connect(self.filter_favorites)
-        layout.addWidget(fav_btn)
+        # Filter buttons (con indicador visual cuando están activos)
+        self.fav_btn = QPushButton("⭐ Favoritos")
+        self.fav_btn.setToolTip("Mostrar solo items favoritos")
+        self.fav_btn.clicked.connect(self.filter_favorites)
+        self.fav_btn.setCheckable(True)  # Hacer que el botón sea checkable
+        layout.addWidget(self.fav_btn)
+        self.filter_buttons['favorites'] = self.fav_btn
+
+        self.inactive_btn = QPushButton("🚫 Desactivados")
+        self.inactive_btn.setToolTip("Mostrar solo items/categorías desactivados")
+        self.inactive_btn.clicked.connect(self.filter_inactive)
+        self.inactive_btn.setCheckable(True)
+        layout.addWidget(self.inactive_btn)
+        self.filter_buttons['inactive'] = self.inactive_btn
+
+        self.archived_btn = QPushButton("📦 Archivados")
+        self.archived_btn.setToolTip("Mostrar solo items archivados")
+        self.archived_btn.clicked.connect(self.filter_archived)
+        self.archived_btn.setCheckable(True)
+        layout.addWidget(self.archived_btn)
+        self.filter_buttons['archived'] = self.archived_btn
 
         sort_btn = QPushButton("🔢 +Items")
         sort_btn.setToolTip("Ordenar por cantidad de items (desc)")
@@ -479,10 +503,16 @@ class StructureDashboard(QDialog):
             # Column 1: Name with icon and item count
             status_indicator = ""
             if not category.get('is_active', 1):  # Si is_active es 0 o False
-                status_indicator = "🚫 "
+                status_indicator = "🚫 "  # Icono que coincide con el botón Desactivar
             category_name = f"{status_indicator}{category['icon']} {category['name']} ({len(category['items'])} items)"
             category_item.setText(1, category_name)
             category_item.setFont(1, self.get_bold_font())
+
+            # Aplicar estilo visual adicional para categorías desactivadas
+            if not category.get('is_active', 1):
+                # Cambiar el color del texto para categorías desactivadas
+                for col in range(4):
+                    category_item.setForeground(col, QBrush(QColor('#888888')))  # Texto gris
 
             # Column 2: Type
             category_item.setText(2, "Categoría")
@@ -496,6 +526,10 @@ class StructureDashboard(QDialog):
             category_tooltip_parts = []
             category_tooltip_parts.append(f"<b>{category['name']}</b>")
             category_tooltip_parts.append(f"<b>Items:</b> {len(category['items'])}")
+
+            # Mostrar estado de categoría
+            if not category.get('is_active', 1):
+                category_tooltip_parts.append("🚫 <b><span style='color: #f44336;'>CATEGORÍA DESACTIVADA</span></b>")
 
             if category['tags']:
                 tags_str = ", ".join([f"#{tag}" for tag in category['tags']])
@@ -529,9 +563,9 @@ class StructureDashboard(QDialog):
                 indicators = ""
                 # Estado de archivo/activo (primero para mayor visibilidad)
                 if item.get('is_archived'):
-                    indicators += "📦 "
+                    indicators += "📦 "  # Icono que coincide con el botón Archivar
                 if not item.get('is_active', 1):  # Si is_active es 0 o False
-                    indicators += "🚫 "
+                    indicators += "🚫 "  # Icono que coincide con el botón Desactivar
                 # Otros indicadores
                 if item.get('is_list'):
                     indicators += "📝 "
@@ -542,6 +576,12 @@ class StructureDashboard(QDialog):
 
                 item_name = f"{indicators}{item['label']}"
                 item_widget.setText(1, item_name)
+
+                # Aplicar estilo visual adicional para items desactivados o archivados
+                if item.get('is_archived') or not item.get('is_active', 1):
+                    # Cambiar el color del texto para items desactivados/archivados
+                    for col in range(4):
+                        item_widget.setForeground(col, QBrush(QColor('#888888')))  # Texto gris
 
                 # Column 2: Item type
                 type_icons = {
@@ -578,6 +618,12 @@ class StructureDashboard(QDialog):
                 tooltip_parts = []
                 tooltip_parts.append(f"<b>{item['label']}</b>")
                 tooltip_parts.append(f"<b>Tipo:</b> {item['type']}")
+
+                # Mostrar estado de archivo/activo
+                if item.get('is_archived'):
+                    tooltip_parts.append("📦 <b><span style='color: #ff9800;'>ARCHIVADO</span></b>")
+                if not item.get('is_active', 1):
+                    tooltip_parts.append("🚫 <b><span style='color: #f44336;'>DESACTIVADO</span></b>")
 
                 if item['description']:
                     tooltip_parts.append(f"<b>Descripción:</b> {item['description']}")
@@ -1474,6 +1520,11 @@ class StructureDashboard(QDialog):
     def filter_favorites(self):
         """Show only favorite items"""
         logger.info("Filtering favorites...")
+
+        # Actualizar estado de filtro
+        self.set_active_filter('favorites')
+
+        # Filtrar estructura
         state_filters = {'favorites': True, 'sensitive': False, 'normal': False}
         filtered_structure = self.dashboard_manager.filter_and_sort_structure(
             structure=self.structure,
@@ -1482,6 +1533,69 @@ class StructureDashboard(QDialog):
         self.tree_widget.clear()
         self.populate_tree(filtered_structure)
         self.stats_label.setText("🔍 Mostrando solo favoritos")
+
+    def filter_inactive(self):
+        """Show only inactive items/categories"""
+        logger.info("Filtering inactive...")
+
+        # Actualizar estado de filtro
+        self.set_active_filter('inactive')
+
+        # Filtrar estructura manualmente
+        import copy
+        filtered_structure = copy.deepcopy(self.structure)
+
+        # Filtrar categorías y items inactivos
+        for category in filtered_structure['categories']:
+            # Filtrar items inactivos en esta categoría
+            category['items'] = [
+                item for item in category['items']
+                if not item.get('is_active', 1)  # Solo items con is_active=0
+            ]
+
+        self.tree_widget.clear()
+        self.populate_tree(filtered_structure)
+        self.stats_label.setText("🚫 Mostrando solo desactivados")
+
+    def filter_archived(self):
+        """Show only archived items"""
+        logger.info("Filtering archived...")
+
+        # Actualizar estado de filtro
+        self.set_active_filter('archived')
+
+        # Filtrar estructura manualmente
+        import copy
+        filtered_structure = copy.deepcopy(self.structure)
+
+        # Filtrar items archivados
+        for category in filtered_structure['categories']:
+            category['items'] = [
+                item for item in category['items']
+                if item.get('is_archived', False)  # Solo items con is_archived=True
+            ]
+
+        self.tree_widget.clear()
+        self.populate_tree(filtered_structure)
+        self.stats_label.setText("📦 Mostrando solo archivados")
+
+    def set_active_filter(self, filter_name):
+        """
+        Set active filter and update button states
+
+        Args:
+            filter_name: 'favorites', 'inactive', 'archived', or None
+        """
+        # Desmarcar todos los botones primero
+        for btn in self.filter_buttons.values():
+            btn.setChecked(False)
+
+        # Marcar el botón activo
+        if filter_name and filter_name in self.filter_buttons:
+            self.filter_buttons[filter_name].setChecked(True)
+
+        self.active_filter = filter_name
+        logger.info(f"Active filter set to: {filter_name}")
 
     def sort_by_items(self):
         """Sort by item count descending"""
@@ -1499,6 +1613,8 @@ class StructureDashboard(QDialog):
         logger.info("Resetting filters...")
         # Clear search
         self.search_bar.clear_search()
+        # Desmarcar todos los filtros
+        self.set_active_filter(None)
         # Reload full structure
         self.tree_widget.clear()
         self.populate_tree(self.structure)
