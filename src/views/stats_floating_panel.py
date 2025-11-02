@@ -130,9 +130,10 @@ class StatsFloatingPanel(QWidget):
         self.stats_widget.refresh()
 
     def position_near_sidebar(self, sidebar_window):
-        """Posicionar cerca del sidebar"""
+        """Posicionar cerca del sidebar - a la izquierda"""
         sidebar_geo = sidebar_window.geometry()
-        x = sidebar_geo.x() + sidebar_geo.width() + 5
+        # Posicionar a la izquierda del sidebar
+        x = sidebar_geo.x() - self.width() - 5
         y = sidebar_geo.y()
         self.move(x, y)
 
