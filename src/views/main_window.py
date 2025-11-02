@@ -8,6 +8,8 @@ import sys
 import logging
 import traceback
 from pathlib import Path
+import ctypes
+from ctypes import wintypes
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from views.sidebar import Sidebar
@@ -31,6 +33,26 @@ from core.notification_manager import NotificationManager
 
 # Get logger
 logger = logging.getLogger(__name__)
+
+# ===========================================================================
+# Windows AppBar API Constants and Structures
+# ===========================================================================
+ABM_NEW = 0x00000000
+ABM_REMOVE = 0x00000001
+ABM_QUERYPOS = 0x00000002
+ABM_SETPOS = 0x00000003
+ABE_RIGHT = 2
+
+
+class APPBARDATA(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", wintypes.DWORD),
+        ("hWnd", wintypes.HWND),
+        ("uCallbackMessage", wintypes.UINT),
+        ("uEdge", wintypes.UINT),
+        ("rc", wintypes.RECT),
+        ("lParam", wintypes.LPARAM),
+    ]
 
 
 class MainWindow(QMainWindow):
@@ -68,8 +90,12 @@ class MainWindow(QMainWindow):
         self.normal_height = None  # Se guardará después de calcular
         self.minimized_height = 75  # Altura cuando está minimizada (title bar 30px + WS label ~45px)
 
+        # AppBar state (para reservar espacio en Windows)
+        self.appbar_registered = False
+
         self.init_ui()
         self.position_window()
+        self.register_appbar()  # Registrar como AppBar para reservar espacio
         self.setup_hotkeys()
         self.setup_tray()
         self.check_notifications_delayed()
@@ -87,11 +113,11 @@ class MainWindow(QMainWindow):
             Qt.WindowType.Tool
         )
 
-        # Calculate window height: 80% of screen height (10% margin top + 10% margin bottom)
+        # Calculate window height: 100% of screen height (toda la altura disponible menos barra de tareas)
         screen = self.screen()
         if screen:
             screen_height = screen.availableGeometry().height()
-            window_height = int(screen_height * 0.8)  # 80% de la altura de la pantalla
+            window_height = screen_height  # 100% de la altura disponible (menos barra de tareas)
         else:
             window_height = 600  # Fallback
 
@@ -627,7 +653,7 @@ class MainWindow(QMainWindow):
             )
 
     def position_window(self):
-        """Position window on the right edge of the screen"""
+        """Position window on the right edge of the screen, ocupando toda la altura"""
         # Get primary screen
         screen = self.screen()
         if screen is None:
@@ -635,11 +661,86 @@ class MainWindow(QMainWindow):
 
         screen_geometry = screen.availableGeometry()
 
-        # Position on right edge
+        # Position on right edge, arriba del todo (y=0)
         x = screen_geometry.width() - self.width()
-        y = (screen_geometry.height() - self.height()) // 2
+        y = screen_geometry.y()  # Arriba del todo (puede ser 0 o el offset si hay barra superior)
 
         self.move(x, y)
+
+    def register_appbar(self):
+        """Registrar la ventana como AppBar de Windows para reservar espacio permanentemente"""
+        try:
+            if sys.platform != 'win32':
+                logger.warning("AppBar solo funciona en Windows")
+                return
+
+            # Get window handle
+            hwnd = int(self.winId())
+            if not hwnd:
+                logger.error("No se pudo obtener el window handle")
+                return
+
+            # Get screen geometry
+            screen = self.screen()
+            if not screen:
+                return
+
+            screen_geometry = screen.availableGeometry()
+
+            # Create APPBARDATA structure
+            abd = APPBARDATA()
+            abd.cbSize = ctypes.sizeof(APPBARDATA)
+            abd.hWnd = hwnd
+            abd.uCallbackMessage = 0
+            abd.uEdge = ABE_RIGHT  # Lado derecho
+
+            # Set the rectangle for the AppBar (right edge)
+            abd.rc.left = screen_geometry.width() - self.width()
+            abd.rc.top = screen_geometry.y()
+            abd.rc.right = screen_geometry.width()
+            abd.rc.bottom = screen_geometry.y() + screen_geometry.height()
+
+            # Register the AppBar
+            result = ctypes.windll.shell32.SHAppBarMessage(ABM_NEW, ctypes.byref(abd))
+            if result:
+                logger.info("AppBar registrada exitosamente - espacio reservado en el escritorio")
+                self.appbar_registered = True
+
+                # Query and set position to reserve space
+                ctypes.windll.shell32.SHAppBarMessage(ABM_QUERYPOS, ctypes.byref(abd))
+                ctypes.windll.shell32.SHAppBarMessage(ABM_SETPOS, ctypes.byref(abd))
+            else:
+                logger.warning("No se pudo registrar AppBar")
+
+        except Exception as e:
+            logger.error(f"Error al registrar AppBar: {e}")
+            logger.debug(traceback.format_exc())
+
+    def unregister_appbar(self):
+        """Desregistrar la ventana como AppBar al cerrar"""
+        try:
+            if not self.appbar_registered:
+                return
+
+            if sys.platform != 'win32':
+                return
+
+            hwnd = int(self.winId())
+            if not hwnd:
+                return
+
+            # Create APPBARDATA structure
+            abd = APPBARDATA()
+            abd.cbSize = ctypes.sizeof(APPBARDATA)
+            abd.hWnd = hwnd
+
+            # Unregister the AppBar
+            ctypes.windll.shell32.SHAppBarMessage(ABM_REMOVE, ctypes.byref(abd))
+            self.appbar_registered = False
+            logger.info("AppBar desregistrada")
+
+        except Exception as e:
+            logger.error(f"Error al desregistrar AppBar: {e}")
 
     def mousePressEvent(self, event):
         """Handle mouse press for dragging"""
@@ -809,6 +910,9 @@ class MainWindow(QMainWindow):
     def quit_application(self):
         """Quit the application"""
         print("Quitting application...")
+
+        # Unregister AppBar
+        self.unregister_appbar()
 
         # Stop hotkey manager
         if self.hotkey_manager:
