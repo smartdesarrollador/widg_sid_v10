@@ -149,6 +149,20 @@ class SimpleBrowserWindow(QWidget):
         nav_layout.setContentsMargins(5, 5, 5, 5)
         nav_layout.setSpacing(5)
 
+        # Botón atrás
+        self.back_btn = QPushButton("◀")
+        self.back_btn.setFixedWidth(40)
+        self.back_btn.setToolTip("Atrás")
+        self.back_btn.clicked.connect(self.go_back)
+        nav_layout.addWidget(self.back_btn)
+
+        # Botón adelante
+        self.forward_btn = QPushButton("▶")
+        self.forward_btn.setFixedWidth(40)
+        self.forward_btn.setToolTip("Adelante")
+        self.forward_btn.clicked.connect(self.go_forward)
+        nav_layout.addWidget(self.forward_btn)
+
         # Label de estado
         self.status_label = QLabel("●")
         self.status_label.setFixedWidth(20)
@@ -429,6 +443,24 @@ class SimpleBrowserWindow(QWidget):
         if browser:
             logger.info("Recargando página")
             browser.reload()
+
+    def go_back(self):
+        """Navega hacia atrás en el historial de la pestaña activa."""
+        browser = self.get_current_browser()
+        if browser and browser.history().canGoBack():
+            logger.info("Navegando hacia atrás")
+            browser.back()
+        else:
+            logger.debug("No se puede navegar hacia atrás")
+
+    def go_forward(self):
+        """Navega hacia adelante en el historial de la pestaña activa."""
+        browser = self.get_current_browser()
+        if browser and browser.history().canGoForward():
+            logger.info("Navegando hacia adelante")
+            browser.forward()
+        else:
+            logger.debug("No se puede navegar hacia adelante")
 
     # ==================== Slots ====================
 
