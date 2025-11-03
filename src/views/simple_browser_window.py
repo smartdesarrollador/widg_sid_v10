@@ -298,6 +298,37 @@ class SimpleBrowserWindow(QWidget):
         self.manage_sessions_btn.clicked.connect(self.show_session_manager)
         tools_layout.addWidget(self.manage_sessions_btn)
 
+        # Separador
+        separator2 = QLabel("|")
+        separator2.setStyleSheet("color: #0f3460;")
+        separator2.setFixedWidth(15)
+        separator2.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        tools_layout.addWidget(separator2)
+
+        # Botón guardar URL como item
+        self.save_url_btn = QPushButton("💾📌")
+        self.save_url_btn.setFixedWidth(45)
+        self.save_url_btn.setFixedHeight(30)
+        self.save_url_btn.setToolTip("Guardar URL actual como item")
+        self.save_url_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #00d4ff;
+                color: #000000;
+                border: none;
+                border-radius: 3px;
+                font-size: 14pt;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #00b8d4;
+            }
+            QPushButton:pressed {
+                background-color: #0091a6;
+            }
+        """)
+        self.save_url_btn.clicked.connect(self.save_url_as_item)
+        tools_layout.addWidget(self.save_url_btn)
+
         # Espacio flexible
         tools_layout.addStretch()
 
@@ -1195,6 +1226,119 @@ class SimpleBrowserWindow(QWidget):
 
         except Exception as e:
             logger.error(f"Error al mostrar gestor de sesiones: {e}")
+
+    def save_url_as_item(self):
+        """Guarda la URL actual como un item en una categoría."""
+        if not self.db:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self,
+                "Error",
+                "No hay conexión a la base de datos"
+            )
+            return
+
+        try:
+            # Obtener navegador actual
+            browser = self.get_current_browser()
+            if not browser:
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.information(
+                    self,
+                    "Sin pestaña",
+                    "No hay ninguna pestaña activa"
+                )
+                return
+
+            # Obtener URL y título actual
+            current_url = browser.url().toString()
+            page_title = browser.title() or "Sin título"
+
+            if not current_url or current_url == "about:blank":
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.information(
+                    self,
+                    "Sin URL",
+                    "No hay URL para guardar"
+                )
+                return
+
+            # Obtener categorías de la base de datos
+            from models.category import Category
+            categories_data = self.db.get_categories()
+
+            # Mapear correctamente los datos (id -> category_id)
+            categories = []
+            for cat in categories_data:
+                category = Category(
+                    category_id=cat['id'],
+                    name=cat['name'],
+                    icon=cat.get('icon', ''),
+                    order_index=cat.get('order_index', 0),
+                    is_active=cat.get('is_active', True),
+                    is_predefined=cat.get('is_predefined', False),
+                    color=cat.get('color'),
+                    badge=cat.get('badge')
+                )
+                categories.append(category)
+
+            if not categories:
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.warning(
+                    self,
+                    "Sin categorías",
+                    "No hay categorías disponibles. Crea una categoría primero."
+                )
+                return
+
+            # Mostrar dialog
+            from src.views.dialogs.save_url_dialog import SaveUrlDialog
+
+            dialog = SaveUrlDialog(
+                current_url=current_url,
+                page_title=page_title,
+                categories=categories,
+                parent=self
+            )
+
+            if dialog.exec():
+                # Obtener datos del dialog
+                data = dialog.get_data()
+
+                # Guardar item en la base de datos
+                item_id = self.db.add_item(
+                    category_id=data['category_id'],
+                    label=data['label'],
+                    content=data['content'],
+                    item_type=data['type'],
+                    description=data['description'],
+                    tags=data['tags']
+                )
+
+                if item_id:
+                    from PyQt6.QtWidgets import QMessageBox
+                    QMessageBox.information(
+                        self,
+                        "Éxito",
+                        f"URL guardada exitosamente como item:\n\n{data['label']}"
+                    )
+                    logger.info(f"URL guardada como item: {data['label']} (ID: {item_id})")
+                else:
+                    from PyQt6.QtWidgets import QMessageBox
+                    QMessageBox.warning(
+                        self,
+                        "Error",
+                        "No se pudo guardar el item en la base de datos"
+                    )
+
+        except Exception as e:
+            logger.error(f"Error al guardar URL como item: {e}", exc_info=True)
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Error al guardar URL:\n{str(e)}"
+            )
 
     def _restore_session_tabs(self, tabs_data: list):
         """
