@@ -1,7 +1,7 @@
 """
 Main Window View
 """
-from PyQt6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QMessageBox
+from PyQt6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QMessageBox, QApplication
 from PyQt6.QtCore import Qt, QPoint, pyqtSignal
 from PyQt6.QtGui import QScreen, QShortcut, QKeySequence
 import sys
@@ -530,13 +530,21 @@ class MainWindow(QMainWindow):
         try:
             logger.info("Browser button clicked")
 
+            # Mostrar cursor de espera mientras se carga el navegador
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+
             # Delegar al controller para toggle del navegador
             if self.controller:
                 self.controller.toggle_browser()
             else:
                 logger.warning("Controller not available")
 
+            # Restaurar cursor normal
+            QApplication.restoreOverrideCursor()
+
         except Exception as e:
+            # Restaurar cursor en caso de error
+            QApplication.restoreOverrideCursor()
             logger.error(f"Error in on_browser_clicked: {e}", exc_info=True)
             QMessageBox.critical(
                 self,

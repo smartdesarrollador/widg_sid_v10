@@ -13,6 +13,7 @@ import traceback
 from pathlib import Path
 from datetime import datetime
 from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtWebEngineWidgets import QWebEngineView  # Necesario para inicializar QtWebEngine
 
 # Fix encoding for Windows console
 if sys.platform == 'win32' and sys.stdout:

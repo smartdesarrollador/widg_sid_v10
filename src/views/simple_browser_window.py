@@ -50,8 +50,8 @@ class SimpleBrowserWindow(QWidget):
         self._setup_timer()
         self._apply_styles()
 
-        # Cargar URL inicial
-        self.load_url(self.url)
+        # Cargar URL inicial de forma asíncrona (evita bloqueo del hilo principal)
+        QTimer.singleShot(100, lambda: self.load_url(self.url))
 
     def _setup_window(self):
         """Configura propiedades de la ventana."""
