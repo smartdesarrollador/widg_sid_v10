@@ -580,6 +580,73 @@ class DBManager:
             return item
         return None
 
+    def get_all_items(self, active_only: bool = False, include_archived: bool = True) -> List[Dict]:
+        """
+        Get all items from all categories
+
+        Args:
+            active_only: If True, only return active items (default: False)
+            include_archived: If True, include archived items (default: True)
+
+        Returns:
+            List[Dict]: List of all item dictionaries (content decrypted if sensitive)
+        """
+        # Build query based on filters
+        conditions = []
+        params = []
+
+        if active_only:
+            conditions.append("is_active = ?")
+            params.append(1)
+
+        if not include_archived:
+            conditions.append("is_archived = ?")
+            params.append(0)
+
+        where_clause = ""
+        if conditions:
+            where_clause = "WHERE " + " AND ".join(conditions)
+
+        query = f"""
+            SELECT * FROM items
+            {where_clause}
+            ORDER BY last_used DESC, created_at DESC
+        """
+
+        results = self.execute_query(query, tuple(params)) if params else self.execute_query(query)
+
+        # Initialize encryption manager for decrypting sensitive items
+        from core.encryption_manager import EncryptionManager
+        encryption_manager = EncryptionManager()
+
+        # Parse tags and decrypt sensitive content
+        for item in results:
+            # Parse tags from JSON or CSV format
+            if item['tags']:
+                try:
+                    # Try to parse as JSON first
+                    item['tags'] = json.loads(item['tags'])
+                except json.JSONDecodeError:
+                    # If JSON parsing fails, try CSV format (legacy)
+                    if isinstance(item['tags'], str):
+                        item['tags'] = [tag.strip() for tag in item['tags'].split(',') if tag.strip()]
+                    else:
+                        item['tags'] = []
+            else:
+                item['tags'] = []
+
+            # Decrypt sensitive content
+            if item.get('is_sensitive') and item.get('content'):
+                try:
+                    item['content'] = encryption_manager.decrypt(item['content'])
+                    logger.debug(f"Content decrypted for item ID: {item['id']}")
+                except Exception as e:
+                    logger.error(f"Failed to decrypt item {item['id']}: {e}")
+                    item['content'] = "[DECRYPTION ERROR]"
+
+        logger.debug(f"Retrieved {len(results)} items")
+        return results
+
     def add_item(self, category_id: int, label: str, content: str,
                  item_type: str = 'TEXT', icon: str = None,
                  is_sensitive: bool = False, is_favorite: bool = False,

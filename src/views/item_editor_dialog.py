@@ -5,7 +5,8 @@ Dialog for creating and editing items
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QTextEdit, QComboBox, QPushButton, QFormLayout, QMessageBox, QCheckBox
+    QTextEdit, QComboBox, QPushButton, QFormLayout, QMessageBox, QCheckBox,
+    QFrame
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
@@ -17,6 +18,7 @@ import logging
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from models.item import Item, ItemType
+from views.widgets.tag_group_selector import TagGroupSelector
 
 # Get logger
 logger = logging.getLogger(__name__)
@@ -204,6 +206,19 @@ class ItemEditorDialog(QDialog):
         self.tags_input.setPlaceholderText("tag1, tag2, tag3 (opcional)")
         form_layout.addRow("Tags:", self.tags_input)
 
+        # Tag Group Selector (optional)
+        if self.controller and hasattr(self.controller, 'config_manager'):
+            try:
+                db_path = str(self.controller.config_manager.db.db_path)
+                self.tag_group_selector = TagGroupSelector(db_path, self)
+                self.tag_group_selector.tags_changed.connect(self.on_tag_group_changed)
+                form_layout.addRow("", self.tag_group_selector)
+            except Exception as e:
+                logger.warning(f"Could not initialize TagGroupSelector: {e}")
+                self.tag_group_selector = None
+        else:
+            self.tag_group_selector = None
+
         # Description field (optional)
         self.description_input = QLineEdit()
         self.description_input.setPlaceholderText("Descripción del item (opcional)")
@@ -367,6 +382,18 @@ class ItemEditorDialog(QDialog):
         self.working_dir_label.setVisible(is_code)
         self.working_dir_input.setVisible(is_code)
 
+    def on_tag_group_changed(self, tags: list):
+        """Handle tag group selector changes"""
+        try:
+            # Actualizar el campo de tags con los tags seleccionados
+            if tags:
+                self.tags_input.setText(", ".join(tags))
+            else:
+                self.tags_input.setText("")
+            logger.debug(f"Tags updated from tag group selector: {tags}")
+        except Exception as e:
+            logger.error(f"Error updating tags from tag group selector: {e}")
+
     def load_item_data(self):
         """Load existing item data if in edit mode"""
         if not self.is_edit_mode or not self.item:
@@ -385,6 +412,9 @@ class ItemEditorDialog(QDialog):
         # Load tags
         if self.item.tags:
             self.tags_input.setText(", ".join(self.item.tags))
+            # También cargar en el tag group selector si existe
+            if self.tag_group_selector:
+                self.tag_group_selector.set_tags(self.item.tags)
 
         # Load description
         if hasattr(self.item, 'description') and self.item.description:
