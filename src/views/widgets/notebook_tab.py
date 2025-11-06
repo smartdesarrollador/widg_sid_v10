@@ -9,7 +9,12 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import pyqtSignal, Qt, QTimer
 from PyQt6.QtGui import QFont
+import sys
+from pathlib import Path
 import logging
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from views.widgets.tag_group_selector import TagGroupSelector
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +27,11 @@ class NotebookTab(QWidget):
     content_changed = pyqtSignal(dict)  # Para auto-guardado (emite datos del formulario)
     cancel_requested = pyqtSignal()  # Cuando se hace click en cancelar
 
-    def __init__(self, tab_id=None, tab_data=None, categories=None, parent=None):
+    def __init__(self, tab_id=None, tab_data=None, categories=None, db_path=None, parent=None):
         super().__init__(parent)
         self.tab_id = tab_id
         self.categories = categories or []
+        self.db_path = db_path
         self.has_unsaved_changes = False
 
         # Debounce para auto-guardado
@@ -133,6 +139,54 @@ class NotebookTab(QWidget):
         form_layout.addWidget(tags_label)
         form_layout.addWidget(self.tags_input)
 
+        # Tag Group Selector (optional) - wrapped in scroll area
+        if self.db_path:
+            try:
+                self.tag_group_selector = TagGroupSelector(self.db_path, self)
+                self.tag_group_selector.tags_changed.connect(self.on_tag_group_changed)
+
+                # Create scroll area for tag group selector
+                tags_scroll_area = QScrollArea()
+                tags_scroll_area.setWidget(self.tag_group_selector)
+                tags_scroll_area.setWidgetResizable(True)
+                tags_scroll_area.setFixedHeight(120)  # Fixed height with scroll
+                tags_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+                tags_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+                tags_scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+                tags_scroll_area.setStyleSheet("""
+                    QScrollArea {
+                        border: 1px solid #3d3d3d;
+                        border-radius: 4px;
+                        background-color: #2d2d2d;
+                    }
+                    QScrollBar:vertical {
+                        background-color: #2d2d2d;
+                        width: 12px;
+                        border-radius: 6px;
+                    }
+                    QScrollBar::handle:vertical {
+                        background-color: #5a5a5a;
+                        border-radius: 6px;
+                        min-height: 20px;
+                    }
+                    QScrollBar::handle:vertical:hover {
+                        background-color: #007acc;
+                    }
+                    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                        height: 0px;
+                    }
+                """)
+
+                form_layout.addWidget(tags_scroll_area)
+            except Exception as e:
+                logger.warning(f"Could not initialize TagGroupSelector: {e}")
+                self.tag_group_selector = None
+        else:
+            self.tag_group_selector = None
+
+        # Add vertical spacer after tag section
+        form_layout.addSpacing(15)
+
         # === DESCRIPCION ===
         desc_label = QLabel("Descripcion (opcional):")
         desc_label.setStyleSheet("color: #B0B0B0; font-size: 11px; font-weight: bold;")
@@ -225,6 +279,18 @@ class NotebookTab(QWidget):
         self.active_check.stateChanged.connect(self.on_content_modified)
         self.archived_check.stateChanged.connect(self.on_content_modified)
 
+    def on_tag_group_changed(self, tags: list):
+        """Handle tag group selector changes"""
+        try:
+            # Actualizar el campo de tags con los tags seleccionados
+            if tags:
+                self.tags_input.setText(", ".join(tags))
+            else:
+                self.tags_input.setText("")
+            logger.debug(f"Tags updated from tag group selector: {tags}")
+        except Exception as e:
+            logger.error(f"Error updating tags from tag group selector: {e}")
+
     def on_content_modified(self):
         """Marcar como modificado y programar auto-guardado"""
         self.has_unsaved_changes = True
@@ -287,7 +353,16 @@ class NotebookTab(QWidget):
 
         self.name_input.setText(data.get('title', ''))
         self.content_input.setPlainText(data.get('content', ''))
-        self.tags_input.setText(data.get('tags', ''))
+
+        # Load tags
+        tags_text = data.get('tags', '')
+        self.tags_input.setText(tags_text)
+
+        # También cargar en el tag group selector si existe
+        if self.tag_group_selector and tags_text:
+            tags_list = [tag.strip() for tag in tags_text.split(',') if tag.strip()]
+            self.tag_group_selector.set_tags(tags_list)
+
         self.description_input.setText(data.get('description', ''))
 
         # Seleccionar categoria

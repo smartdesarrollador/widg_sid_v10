@@ -101,21 +101,6 @@ class NotebookWindow(QWidget):
 
         layout.addWidget(self.tab_widget)
 
-        # === BOTON PARA AGREGAR TAB ===
-        add_tab_container = QWidget()
-        add_tab_container.setFixedHeight(50)
-        add_tab_layout = QHBoxLayout(add_tab_container)
-        add_tab_layout.setContentsMargins(10, 5, 10, 5)
-
-        self.add_tab_button = QPushButton("+ Nueva Nota")
-        self.add_tab_button.setMinimumHeight(40)
-        self.add_tab_button.clicked.connect(self.add_new_tab)
-        self.style_add_button(self.add_tab_button)
-
-        add_tab_layout.addWidget(self.add_tab_button)
-
-        layout.addWidget(add_tab_container)
-
     def create_title_bar(self):
         """Crear barra de título personalizada"""
         title_bar = QWidget()
@@ -136,6 +121,15 @@ class NotebookWindow(QWidget):
         layout.addWidget(icon_label)
         layout.addWidget(title_label)
         layout.addStretch()
+
+        # Botón para agregar nueva nota
+        self.add_note_btn = QPushButton("+")
+        self.add_note_btn.setFixedSize(35, 35)
+        self.add_note_btn.setObjectName("addNoteBtn")
+        self.add_note_btn.setToolTip("Nueva Nota")
+        self.add_note_btn.clicked.connect(self.add_new_tab)
+
+        layout.addWidget(self.add_note_btn)
 
         # Botón para mostrar lista de pestañas
         self.tabs_list_btn = QPushButton("📑")
@@ -211,7 +205,8 @@ class NotebookWindow(QWidget):
 
         # Crear widget
         categories = self.controller.get_categories()
-        tab_widget = NotebookTab(tab_id=tab_id, categories=categories)
+        db_path = str(self.controller.config_manager.db.db_path)
+        tab_widget = NotebookTab(tab_id=tab_id, categories=categories, db_path=db_path)
 
         # Conectar señales
         tab_widget.save_requested.connect(self.on_save_as_item)
@@ -227,11 +222,13 @@ class NotebookWindow(QWidget):
     def add_tab_from_data(self, tab_data):
         """Agregar pestaña con datos existentes"""
         categories = self.controller.get_categories()
+        db_path = str(self.controller.config_manager.db.db_path)
 
         tab_widget = NotebookTab(
             tab_id=tab_data['id'],
             tab_data=tab_data,
-            categories=categories
+            categories=categories,
+            db_path=db_path
         )
 
         # Conectar señales
@@ -553,13 +550,23 @@ class NotebookWindow(QWidget):
                 border-bottom: 1px solid #3D3D3D;
             }
 
-            #tabsListBtn, #minBtn, #closeBtn {
+            #addNoteBtn, #tabsListBtn, #minBtn, #closeBtn {
                 background-color: transparent;
                 border: none;
                 border-radius: 4px;
                 font-size: 20px;
                 font-weight: bold;
                 color: #B0B0B0;
+            }
+
+            #addNoteBtn {
+                font-size: 22px;
+                color: #00CC00;
+            }
+
+            #addNoteBtn:hover {
+                background-color: #0e6b0e;
+                color: #FFFFFF;
             }
 
             #tabsListBtn {
@@ -625,27 +632,6 @@ class NotebookWindow(QWidget):
             }
         """)
 
-    def style_add_button(self, widget):
-        """Estilo para botón de agregar tab"""
-        widget.setStyleSheet("""
-            QPushButton {
-                background-color: #2D2D2D;
-                color: #FFFFFF;
-                border: 2px dashed #3D3D3D;
-                border-radius: 6px;
-                font-size: 13px;
-                font-weight: bold;
-                padding: 10px;
-            }
-            QPushButton:hover {
-                background-color: #0078D4;
-                border-color: #0078D4;
-                border-style: solid;
-            }
-            QPushButton:pressed {
-                background-color: #005A9E;
-            }
-        """)
 
     # === WINDOWS APPBAR (RESERVA DE ESPACIO) ===
 
