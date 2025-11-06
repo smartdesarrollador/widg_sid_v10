@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from views.widgets.step_item_widget import StepItemWidget
+from views.widgets.tag_group_selector import TagGroupSelector
 from controllers.list_controller import ListController
 
 logger = logging.getLogger(__name__)
@@ -42,19 +43,21 @@ class ListCreatorDialog(QDialog):
     list_created = pyqtSignal(str, int, list)  # (list_name, category_id, item_ids)
 
     def __init__(self, list_controller: ListController, categories: list,
-                 selected_category_id: int = None, parent=None):
+                 db_path: str = None, selected_category_id: int = None, parent=None):
         """
         Inicializa el diálogo de creación de listas
 
         Args:
             list_controller: Controlador de listas
             categories: Lista de categorías disponibles
+            db_path: Path a la base de datos para TagGroupSelector
             selected_category_id: ID de categoría preseleccionada
             parent: Widget padre
         """
         super().__init__(parent)
         self.list_controller = list_controller
         self.categories = categories
+        self.db_path = db_path
         self.selected_category_id = selected_category_id
 
         self.step_widgets: List[StepItemWidget] = []
@@ -139,6 +142,60 @@ class ListCreatorDialog(QDialog):
         self.description_input.setPlaceholderText("Descripción de la lista, contexto, notas...")
         self.description_input.setMaximumHeight(60)
         main_layout.addWidget(self.description_input)
+
+        # === TAGS COMUNES (se aplican a todos los pasos) ===
+        tags_label = QLabel("Tags comunes (opcional - se aplican a todos los pasos):")
+        tags_label.setStyleSheet("font-size: 12px; margin-top: 10px;")
+        main_layout.addWidget(tags_label)
+
+        self.common_tags_input = QLineEdit()
+        self.common_tags_input.setPlaceholderText("Ej: python, git, produccion...")
+        main_layout.addWidget(self.common_tags_input)
+
+        # Tag Group Selector (optional) - wrapped in scroll area
+        if self.db_path:
+            try:
+                self.tag_group_selector = TagGroupSelector(self.db_path, self)
+                self.tag_group_selector.tags_changed.connect(self.on_tag_group_changed)
+
+                # Create scroll area for tag group selector
+                tags_scroll_area = QScrollArea()
+                tags_scroll_area.setWidget(self.tag_group_selector)
+                tags_scroll_area.setWidgetResizable(True)
+                tags_scroll_area.setFixedHeight(120)  # Fixed height with scroll
+                tags_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+                tags_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+                tags_scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+                tags_scroll_area.setStyleSheet("""
+                    QScrollArea {
+                        border: 1px solid #3d3d3d;
+                        border-radius: 4px;
+                        background-color: #2d2d2d;
+                    }
+                    QScrollBar:vertical {
+                        background-color: #2d2d2d;
+                        width: 12px;
+                        border-radius: 6px;
+                    }
+                    QScrollBar::handle:vertical {
+                        background-color: #5a5a5a;
+                        border-radius: 6px;
+                        min-height: 20px;
+                    }
+                    QScrollBar::handle:vertical:hover {
+                        background-color: #007acc;
+                    }
+                    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                        height: 0px;
+                    }
+                """)
+
+                main_layout.addWidget(tags_scroll_area)
+            except Exception as e:
+                logger.warning(f"Could not initialize TagGroupSelector: {e}")
+                self.tag_group_selector = None
+        else:
+            self.tag_group_selector = None
 
         # === SEPARADOR ===
         separator_label = QLabel("──────── Pasos del Proceso ────────")
@@ -416,18 +473,35 @@ class ListCreatorDialog(QDialog):
 
         return True, ""
 
+    def on_tag_group_changed(self, tags: list):
+        """Handle tag group selector changes"""
+        try:
+            # Actualizar el campo de tags comunes con los tags seleccionados
+            if tags:
+                self.common_tags_input.setText(", ".join(tags))
+            else:
+                self.common_tags_input.setText("")
+            logger.debug(f"Common tags updated from tag group selector: {tags}")
+        except Exception as e:
+            logger.error(f"Error updating common tags from tag group selector: {e}")
+
     def get_steps_data(self) -> List[dict]:
         """
-        Obtiene los datos de todos los pasos
+        Obtiene los datos de todos los pasos y les agrega los tags comunes
 
         Returns:
             Lista de diccionarios con datos de cada paso
         """
+        # Obtener tags comunes
+        common_tags = self.common_tags_input.text().strip()
+
         steps_data = []
         for widget in self.step_widgets:
             data = widget.get_step_data()
             # Solo incluir pasos que tengan al menos label
             if data['label']:
+                # Agregar tags comunes a este paso
+                data['tags'] = common_tags
                 steps_data.append(data)
         return steps_data
 

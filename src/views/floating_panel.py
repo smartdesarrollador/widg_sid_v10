@@ -731,9 +731,11 @@ class FloatingPanel(QWidget):
                 logger.info(f"Loaded {len(categories)} categories for dialog")
 
             # Crear y mostrar dialog de creación
+            db_path = str(self.config_manager.db.db_path) if self.config_manager and hasattr(self.config_manager, 'db') else None
             creator_dialog = ListCreatorDialog(
                 list_controller=self.list_controller,
                 categories=categories,
+                db_path=db_path,
                 selected_category_id=int(self.current_category.id) if hasattr(self.current_category, 'id') and self.current_category.id else None,
                 parent=self
             )
