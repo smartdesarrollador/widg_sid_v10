@@ -39,7 +39,8 @@
       "Bash(if not exist \"src\\database\\migrations\" mkdir \"src\\database\\migrations\")",
       "Bash(if not exist \"tests\" mkdir \"tests\")",
       "Bash(if not exist \"util\\migrations\" mkdir \"util\\migrations\")",
-      "Bash(tasklist /FI \"IMAGENAME eq python.exe\" 2)"
+      "Bash(tasklist /FI \"IMAGENAME eq python.exe\" 2)",
+      "Bash(del generate_db_schema.py)"
     ],
     "deny": [],
     "ask": []

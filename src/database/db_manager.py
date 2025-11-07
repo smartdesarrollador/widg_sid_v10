@@ -652,6 +652,7 @@ class DBManager:
                  is_sensitive: bool = False, is_favorite: bool = False,
                  tags: List[str] = None, description: str = None,
                  working_dir: str = None, color: str = None,
+                 badge: str = None,
                  is_active: bool = True, is_archived: bool = False,
                  is_list: bool = False, list_group: str = None,
                  orden_lista: int = 0) -> int:
@@ -670,6 +671,7 @@ class DBManager:
             description: Item description (optional)
             working_dir: Working directory for CODE items (optional)
             color: Item color for visual identification (optional)
+            badge: Item badge text (optional)
             is_active: Whether item is active (default True)
             is_archived: Whether item is archived (default False)
             is_list: Whether item is part of a list (default False)
@@ -689,12 +691,12 @@ class DBManager:
         tags_json = json.dumps(tags or [])
         query = """
             INSERT INTO items
-            (category_id, label, content, type, icon, is_sensitive, is_favorite, tags, description, working_dir, color, is_active, is_archived, is_list, list_group, orden_lista, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            (category_id, label, content, type, icon, is_sensitive, is_favorite, tags, description, working_dir, color, badge, is_active, is_archived, is_list, list_group, orden_lista, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         """
         item_id = self.execute_update(
             query,
-            (category_id, label, content, item_type, icon, is_sensitive, is_favorite, tags_json, description, working_dir, color, is_active, is_archived, is_list, list_group, orden_lista)
+            (category_id, label, content, item_type, icon, is_sensitive, is_favorite, tags_json, description, working_dir, color, badge, is_active, is_archived, is_list, list_group, orden_lista)
         )
         list_info = f", List: {list_group}[{orden_lista}]" if is_list else ""
         logger.info(f"Item added: {label} (ID: {item_id}, Sensitive: {is_sensitive}, Favorite: {is_favorite}, Active: {is_active}, Archived: {is_archived}{list_info})")
@@ -706,9 +708,9 @@ class DBManager:
 
         Args:
             item_id: Item ID to update
-            **kwargs: Fields to update (label, content, type, icon, is_sensitive, is_favorite, tags, description, working_dir, is_active, is_archived, is_list, list_group, orden_lista)
+            **kwargs: Fields to update (label, content, type, icon, is_sensitive, is_favorite, tags, description, working_dir, color, badge, is_active, is_archived, is_list, list_group, orden_lista)
         """
-        allowed_fields = ['label', 'content', 'type', 'icon', 'is_sensitive', 'is_favorite', 'tags', 'description', 'working_dir', 'color', 'is_active', 'is_archived', 'is_list', 'list_group', 'orden_lista']
+        allowed_fields = ['label', 'content', 'type', 'icon', 'is_sensitive', 'is_favorite', 'tags', 'description', 'working_dir', 'color', 'badge', 'is_active', 'is_archived', 'is_list', 'list_group', 'orden_lista']
         updates = []
         params = []
 
@@ -2442,6 +2444,62 @@ class DBManager:
         query = "SELECT COUNT(*) as count FROM notebook_tabs"
         result = self.execute_query(query)
         return result[0]['count'] if result else 0
+
+    # ==================== AI Bulk Import Support ====================
+
+    def get_category_by_id(self, category_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Get category by ID.
+
+        Args:
+            category_id: ID of the category
+
+        Returns:
+            Dictionary with category data or None if not found
+        """
+        query = "SELECT * FROM categories WHERE id = ?"
+        result = self.execute_query(query, (category_id,))
+
+        if result:
+            category = dict(result[0])
+            logger.debug(f"Category found: {category['name']} (ID: {category_id})")
+            return category
+        else:
+            logger.warning(f"Category not found: ID {category_id}")
+            return None
+
+    def update_category_item_count(self, category_id: int) -> None:
+        """
+        Update item_count field of a category based on active items.
+
+        This method counts all active items in the category and updates
+        the item_count field accordingly.
+
+        Args:
+            category_id: ID of the category to update
+        """
+        try:
+            with self.transaction() as conn:
+                cursor = conn.cursor()
+
+                # Count active items in category
+                cursor.execute(
+                    "SELECT COUNT(*) as count FROM items WHERE category_id = ? AND is_active = 1",
+                    (category_id,)
+                )
+                count = cursor.fetchone()['count']
+
+                # Update category item_count
+                cursor.execute(
+                    "UPDATE categories SET item_count = ? WHERE id = ?",
+                    (count, category_id)
+                )
+
+            logger.info(f"Updated item_count for category {category_id}: {count} items")
+
+        except Exception as e:
+            logger.error(f"Error updating category item_count for {category_id}: {e}")
+            raise
 
     # ==================== Context Manager ====================
 

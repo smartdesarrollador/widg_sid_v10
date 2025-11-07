@@ -45,6 +45,9 @@ class Sidebar(QWidget):
     # Signal emitted when browser button is clicked
     browser_clicked = pyqtSignal()
 
+    # Signal emitted when AI Bulk button is clicked
+    ai_bulk_clicked = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.category_buttons = {}
@@ -332,6 +335,39 @@ class Sidebar(QWidget):
         self.stats_button.clicked.connect(self.on_stats_clicked)
         main_layout.addWidget(self.stats_button)
 
+        # AI Bulk Creation button
+        self.ai_bulk_button = QPushButton("🤖")
+        self.ai_bulk_button.setFixedSize(70, 45)
+        self.ai_bulk_button.setToolTip("Creación Masiva con IA")
+        self.ai_bulk_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.ai_bulk_button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.theme.get_color('background_deep')};
+                color: {self.theme.get_color('text_secondary')};
+                border: none;
+                border-top: 2px solid {self.theme.get_color('surface')};
+                font-size: 16pt;
+            }}
+            QPushButton:hover {{
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 {self.theme.get_color('primary')},
+                    stop:1 {self.theme.get_color('accent')}
+                );
+                color: {self.theme.get_color('text_primary')};
+            }}
+            QPushButton:pressed {{
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 {self.theme.get_color('accent')},
+                    stop:1 {self.theme.get_color('primary')}
+                );
+                color: {self.theme.get_color('background_deep')};
+            }}
+        """)
+        self.ai_bulk_button.clicked.connect(self.on_ai_bulk_clicked)
+        main_layout.addWidget(self.ai_bulk_button)
+
         # Browser button
         self.browser_button = QPushButton("🌐")
         self.browser_button.setFixedSize(70, 45)
@@ -531,6 +567,10 @@ class Sidebar(QWidget):
     def on_stats_clicked(self):
         """Handle stats button click"""
         self.stats_clicked.emit()
+
+    def on_ai_bulk_clicked(self):
+        """Handle AI bulk creation button click"""
+        self.ai_bulk_clicked.emit()
 
     def on_browser_clicked(self):
         """Handle browser button click"""

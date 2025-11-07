@@ -187,6 +187,7 @@ class MainWindow(QMainWindow):
         self.sidebar.global_search_clicked.connect(self.on_global_search_clicked)
         self.sidebar.favorites_clicked.connect(self.on_favorites_clicked)
         self.sidebar.stats_clicked.connect(self.on_stats_clicked)
+        self.sidebar.ai_bulk_clicked.connect(self.on_ai_bulk_clicked)
         self.sidebar.browser_clicked.connect(self.on_browser_clicked)
         self.sidebar.dashboard_clicked.connect(self.open_structure_dashboard)
         self.sidebar.settings_clicked.connect(self.open_settings)
@@ -531,6 +532,66 @@ class MainWindow(QMainWindow):
         if self.stats_panel:
             self.stats_panel.deleteLater()
             self.stats_panel = None
+
+    def on_ai_bulk_clicked(self):
+        """Handle AI Bulk creation button click - open wizard"""
+        try:
+            logger.info("AI Bulk button clicked")
+
+            # Import dialog aquí para evitar circular imports
+            from views.dialogs.ai_bulk_wizard import AIBulkWizard
+
+            # Obtener DBManager del controller
+            if not self.controller or not hasattr(self.controller, 'config_manager'):
+                logger.error("Controller or config_manager not available")
+                QMessageBox.warning(
+                    self,
+                    "Error",
+                    "No se pudo acceder al gestor de base de datos."
+                )
+                return
+
+            db_manager = self.controller.config_manager.db
+
+            # Crear y mostrar wizard
+            wizard = AIBulkWizard(db_manager, self)
+            wizard.items_created.connect(self.on_bulk_items_created)
+
+            logger.debug("Opening AI Bulk wizard")
+            wizard.exec()
+
+        except Exception as e:
+            logger.error(f"Error in on_ai_bulk_clicked: {e}", exc_info=True)
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Error al abrir el wizard de creación masiva:\n{str(e)}"
+            )
+
+    def on_bulk_items_created(self, count: int):
+        """
+        Callback después de crear items bulk.
+
+        Args:
+            count: Número de items creados
+        """
+        try:
+            logger.info(f"Bulk items created: {count}")
+
+            # Refresh UI - recargar categorías
+            if self.controller:
+                self.controller.load_categories()
+                logger.debug("Categories reloaded after bulk creation")
+
+            # Mostrar notificación de éxito
+            QMessageBox.information(
+                self,
+                "Éxito",
+                f"Se crearon {count} items exitosamente."
+            )
+
+        except Exception as e:
+            logger.error(f"Error in on_bulk_items_created: {e}", exc_info=True)
 
     def on_browser_clicked(self):
         """Handle browser button click - toggle browser window"""
